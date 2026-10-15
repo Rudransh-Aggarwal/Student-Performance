@@ -1,0 +1,27 @@
+{
+  "name": "data-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "import:oulad": "node src/scripts/import-oulad.js",
+    "test": "node --test test/trainingRows.test.js test/oulad.test.js test/studentFeatures.test.js test/synthetic.test.js test/routes.test.js test/instructors.test.js",
+    "generate:sample": "node src/scripts/generate-sample.js",
+    "export:training": "node src/scripts/export-training-data.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "csv-parse": "^7.0.3",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "firebase-admin": "^14.5.0",
+    "helmet": "^8.3.0",
+    "mongoose": "^9.10.2",
+    "zod": "^4.6.5"
+  }
+}
