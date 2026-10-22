@@ -1,0 +1,79 @@
+# The trained model (risk_model_v2.joblib) is git-ignored and is NOT baked into the image.
+# Copy it onto the ml-models volume (mounted at /app/models) before starting.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-service
+  namespace: student-performance
+spec:
+  selector:
+    app: ml-service
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-models
+  namespace: student-performance
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-service
+  namespace: student-performance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-service
+  template:
+    metadata:
+      labels:
+        app: ml-service
+    spec:
+      containers:
+        - name: ml-service
+          image: student-performance/ml-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          env:
+            - name: MODEL_DIR
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: MODEL_DIR
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 768Mi
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: ml-models

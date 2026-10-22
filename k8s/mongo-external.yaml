@@ -1,0 +1,15 @@
+# Exposes MongoDB on localhost:27017 for MongoDB Compass (Docker Desktop only).
+# The internal headless Service "mongo" in mongo.yaml is unchanged.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-external
+  namespace: student-performance
+spec:
+  type: LoadBalancer
+  selector:
+    app: mongo
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: 27017

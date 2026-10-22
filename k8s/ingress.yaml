@@ -1,0 +1,19 @@
+# Only the frontend is exposed. Its Nginx proxies /api/auth, /api/data and /ml to the
+# internal ClusterIP services, so the backends are never reachable from outside the cluster.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: student-performance
+  namespace: student-performance
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

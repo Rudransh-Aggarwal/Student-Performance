@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: student-performance
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: student-performance
+data:
+  NODE_ENV: production
+  # Set to the public URL served by the Ingress, e.g. https://example.org
+  CLIENT_URL: http://localhost:3000
+  FIREBASE_PROJECT_ID: capstone-project-f5039
+  AUTH_SERVICE_URL: http://auth-service:4000
+  MODEL_DIR: /app/models

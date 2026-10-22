@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-service
+  namespace: student-performance
+spec:
+  selector:
+    app: data-service
+  ports:
+    - name: http
+      port: 4100
+      targetPort: 4100
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-service
+  namespace: student-performance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: data-service
+  template:
+    metadata:
+      labels:
+        app: data-service
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: data-service
+          image: student-performance/data-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4100
+          env:
+            - name: PORT
+              value: "4100"
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NODE_ENV
+            - name: CLIENT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: CLIENT_URL
+            - name: FIREBASE_PROJECT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: FIREBASE_PROJECT_ID
+            - name: AUTH_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: AUTH_SERVICE_URL
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MONGO_URI
+            - name: AUTH_SERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: AUTH_SERVICE_SECRET
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4100
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4100
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
