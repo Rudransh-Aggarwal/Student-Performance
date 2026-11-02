@@ -1,0 +1,84 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"   # reachable only from your own machine
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: devpassword
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ml-service:
+    build:
+      context: ./ml-service
+    ports:
+      - "127.0.0.1:5000:5000"
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: ./auth-service
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      MONGO_URI: mongodb://admin:devpassword@mongo:27017/student_prediction?authSource=admin
+      CLIENT_URL: http://localhost:5173
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:?Set FIREBASE_PROJECT_ID in .env}
+      AUTH_SERVICE_SECRET: ${AUTH_SERVICE_SECRET:-development-service-secret}
+      DATA_SERVICE_URL: http://data-service:4100
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  data-service:
+    build:
+      context: ./data-service
+    ports:
+      - "127.0.0.1:4100:4100"
+    environment:
+      NODE_ENV: production
+      PORT: "4100"
+      MONGO_URI: mongodb://admin:devpassword@mongo:27017/student_prediction?authSource=admin
+      CLIENT_URL: http://localhost:5173
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:?Set FIREBASE_PROJECT_ID in .env}
+      AUTH_SERVICE_URL: http://auth-service:4000
+      AUTH_SERVICE_SECRET: ${AUTH_SERVICE_SECRET:-development-service-secret}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY:?Set VITE_FIREBASE_API_KEY in .env}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN:?Set VITE_FIREBASE_AUTH_DOMAIN in .env}
+        VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID:?Set VITE_FIREBASE_PROJECT_ID in .env}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:?Set VITE_FIREBASE_APP_ID in .env}
+        VITE_AUTH_PROVIDERS: ${VITE_AUTH_PROVIDERS:-google,github}
+        # Same-origin: Nginx forwards /api/data and /ml to the services.
+        VITE_DATA_SERVICE_URL: ""
+        VITE_ML_SERVICE_URL: /ml
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      - auth-service
+      - data-service
+      - ml-service
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
