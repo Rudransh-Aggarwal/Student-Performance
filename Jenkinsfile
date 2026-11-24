@@ -50,6 +50,8 @@ pipeline {
         withCredentials([file(credentialsId: 'student-performance-env', variable: 'ENV_FILE')]) {
           bat 'copy /Y "%ENV_FILE%" .env'
         }
+        bat 'if not exist ml-service\\models\\risk_model_v2.joblib copy /Y "C:\\jenkins-artifacts\\risk_model_v2.joblib" "ml-service\\models\\risk_model_v2.joblib"'
+        bat 'if not exist ml-service\\models\\model_card.json copy /Y "C:\\jenkins-artifacts\\model_card.json" "ml-service\\models\\model_card.json"'
         bat 'docker compose -f docker-compose.yml build --pull'
       }
     }
