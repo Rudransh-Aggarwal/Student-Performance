@@ -21,25 +21,25 @@ pipeline {
       parallel {
         stage('auth-service') {
           steps {
-            bat 'docker run --rm -v "%WORKSPACE%\\auth-service:/app" -w /app node:22-alpine sh -c "npm install --no-audit --no-fund && npm test"'
+            bat 'docker run --rm -v "%WORKSPACE%\\auth-service:/src:ro" node:22-alpine sh -c "mkdir /work && cp -r /src/. /work && cd /work && npm install --no-audit --no-fund && npm test"'
           }
         }
 
         stage('data-service') {
           steps {
-            bat 'docker run --rm -v "%WORKSPACE%\\data-service:/app" -w /app node:22-alpine sh -c "npm install --no-audit --no-fund && npm test"'
+            bat 'docker run --rm -v "%WORKSPACE%\\data-service:/src:ro" node:22-alpine sh -c "mkdir /work && cp -r /src/. /work && cd /work && npm install --no-audit --no-fund && npm test"'
           }
         }
 
         stage('frontend-build') {
           steps {
-            bat 'docker run --rm -v "%WORKSPACE%\\frontend:/app" -w /app node:22-alpine sh -c "npm install --no-audit --no-fund && npm run build"'
+            bat 'docker run --rm -v "%WORKSPACE%\\frontend:/src:ro" node:22-alpine sh -c "mkdir /work && cp -r /src/. /work && cd /work && npm install --no-audit --no-fund && npm run build"'
           }
         }
 
         stage('ml-service') {
           steps {
-            bat 'docker run --rm -v "%WORKSPACE%\\ml-service:/app" -w /app python:3.14-slim sh -c "pip install --no-cache-dir -q -r requirements-dev.txt && pytest -q"'
+            bat 'docker run --rm -v "%WORKSPACE%\\ml-service:/src:ro" python:3.14-slim sh -c "mkdir /work && cp -r /src/. /work && cd /work && pip install --no-cache-dir -q -r requirements-dev.txt && pytest -q"'
           }
         }
       }
@@ -78,10 +78,10 @@ pipeline {
 
   post {
     failure {
-      bat 'docker compose -f docker-compose.yml logs --tail=100 || exit /b 0'
+      bat(script: 'docker compose -f docker-compose.yml logs --tail=100', returnStatus: true)
     }
     always {
-      bat 'if exist .env del /q .env'
+      bat(script: 'if exist .env del /q .env', returnStatus: true)
       cleanWs()
     }
   }
