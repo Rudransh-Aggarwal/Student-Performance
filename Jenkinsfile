@@ -1,7 +1,6 @@
-// Jenkinsfile (repo root): CI/CD with Docker Compose only (no Kubernetes).
-// Required Jenkins plugins: Pipeline, Docker Pipeline, Credentials Binding, Workspace Cleanup.
-// Required on the agent: Docker Engine, Docker Compose v2 plugin, curl.
-// Required credential: "student-performance-env" (Secret file) = a copy of the root .env file.
+// Jenkinsfile (repo root). Windows Jenkins agent, Docker Desktop in Linux containers mode.
+// Plugins: Pipeline, Credentials Binding, Workspace Cleanup, Git.
+// Credential: "student-performance-env" (Secret file = copy of the root .env).
 
 pipeline {
   agent any
@@ -21,42 +20,26 @@ pipeline {
     stage('Test') {
       parallel {
         stage('auth-service') {
-          agent { docker { image 'node:22-alpine'; reuseNode true } }
           steps {
-            dir('auth-service') {
-              sh 'npm install --no-audit --no-fund'
-              sh 'npm test'
-            }
+            bat 'docker run --rm -v "%WORKSPACE%\\auth-service:/app" -w /app node:22-alpine sh -c "npm install --no-audit --no-fund && npm test"'
           }
         }
 
         stage('data-service') {
-          agent { docker { image 'node:22-alpine'; reuseNode true } }
           steps {
-            dir('data-service') {
-              sh 'npm install --no-audit --no-fund'
-              sh 'npm test'
-            }
+            bat 'docker run --rm -v "%WORKSPACE%\\data-service:/app" -w /app node:22-alpine sh -c "npm install --no-audit --no-fund && npm test"'
           }
         }
 
         stage('frontend-build') {
-          agent { docker { image 'node:22-alpine'; reuseNode true } }
           steps {
-            dir('frontend') {
-              sh 'npm install --no-audit --no-fund'
-              sh 'npm run build'
-            }
+            bat 'docker run --rm -v "%WORKSPACE%\\frontend:/app" -w /app node:22-alpine sh -c "npm install --no-audit --no-fund && npm run build"'
           }
         }
 
         stage('ml-service') {
-          agent { docker { image 'python:3.14-slim'; reuseNode true } }
           steps {
-            dir('ml-service') {
-              sh 'pip install --no-cache-dir -q -r requirements-dev.txt'
-              sh 'pytest -q'
-            }
+            bat 'docker run --rm -v "%WORKSPACE%\\ml-service:/app" -w /app python:3.14-slim sh -c "pip install --no-cache-dir -q -r requirements-dev.txt && pytest -q"'
           }
         }
       }
@@ -65,45 +48,40 @@ pipeline {
     stage('Build Images') {
       steps {
         withCredentials([file(credentialsId: 'student-performance-env', variable: 'ENV_FILE')]) {
-          sh 'cp "$ENV_FILE" .env && chmod 600 .env'
+          bat 'copy /Y "%ENV_FILE%" .env'
         }
-        sh 'docker compose -f docker-compose.yml build --pull'
+        bat 'docker compose -f docker-compose.yml build --pull'
       }
     }
 
     stage('Deploy') {
-      when { branch 'main' }
+      when {
+        expression { ((env.BRANCH_NAME ?: env.GIT_BRANCH ?: '')).endsWith('main') }
+      }
       steps {
-        sh 'docker compose -f docker-compose.yml up -d --remove-orphans'
+        bat 'docker compose -f docker-compose.yml up -d --remove-orphans'
       }
     }
 
     stage('Smoke Test') {
-      when { branch 'main' }
+      when {
+        expression { ((env.BRANCH_NAME ?: env.GIT_BRANCH ?: '')).endsWith('main') }
+      }
       steps {
-        sh '''
-          set -e
-          check() {
-            curl -fsS --retry 10 --retry-delay 3 --retry-connrefused "$1" > /dev/null
-            echo "OK: $1"
-          }
-          check http://127.0.0.1:4000/healthz
-          check http://127.0.0.1:4100/health
-          check http://127.0.0.1:5000/health
-          check http://127.0.0.1:5173/
-        '''
+        bat 'curl.exe -fsS --retry 10 --retry-delay 3 --retry-connrefused http://127.0.0.1:4000/healthz'
+        bat 'curl.exe -fsS --retry 10 --retry-delay 3 --retry-connrefused http://127.0.0.1:4100/health'
+        bat 'curl.exe -fsS --retry 10 --retry-delay 3 --retry-connrefused http://127.0.0.1:5000/health'
+        bat 'curl.exe -fsS --retry 10 --retry-delay 3 --retry-connrefused http://127.0.0.1:5173/'
       }
     }
   }
 
   post {
     failure {
-      sh 'docker compose -f docker-compose.yml logs --tail=100 || true'
+      bat 'docker compose -f docker-compose.yml logs --tail=100 || exit /b 0'
     }
     always {
-      sh 'rm -f .env || true'
-      // Test containers run as root, so return file ownership to the Jenkins user before cleanup.
-      sh 'docker run --rm -v "$WORKSPACE:/ws" alpine chown -R "$(id -u):$(id -g)" /ws || true'
+      bat 'if exist .env del /q .env'
       cleanWs()
     }
   }
