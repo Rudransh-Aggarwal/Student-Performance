@@ -129,19 +129,23 @@ export function createAuthRouter({
         if (target.role === 'admin') {
           return next(new AppError(403, 'ADMIN_ROLE_PROTECTED', 'Admin roles can only be changed by the seed script'));
         }
+        const previousRole = target.role;
         const updated = await users.updateRole(firebaseUid, req.body.role);
         if (!updated) {
           return next(new AppError(409, 'ROLE_UPDATE_CONFLICT', 'The account changed while updating. Try again.'));
         }
-        // Audit entry and module-assignment cleanup live in data-service; a failure surfaces as 502 and can be retried.
-        await notifyRoleChange({
-          actorUid: req.user.uid,
-          actorName: req.user.name,
-          targetUid: firebaseUid,
-          targetName: target.name,
-          previousRole: target.role,
-          newRole: req.body.role,
-        });
+        try {
+          await notifyRoleChange({
+            actorUid: req.user.uid,
+            actorName: req.user.name,
+            targetUid: firebaseUid,
+            targetName: target.name,
+            previousRole,
+            newRole: req.body.role,
+          });
+        } catch (error) {
+          return next(new AppError(502, 'ROLE_SYNC_FAILED', 'The role was saved, but the audit entry could not be recorded. Try again.'));
+        }
         return res.json({ user: { ...toPublicUser(updated), firebaseUid } });
       } catch (error) {
         return next(error);
